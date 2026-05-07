@@ -22,40 +22,66 @@ float altitude;
 
 void setup() {
   Serial.begin(115200);
+  delay(1500); // Esperar a que el Serial USB se conecte
+
+  Serial.println("=== EMRY_MK1 iniciando ===");
 
   // Initialize I2C with specific SDA (21) and SCL (22) pins
   Wire.begin(21, 22);
 
-  // Initialize OLED display
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  // Try 0x3D if 0x3C doesn't work
-    Serial.println(F("SSD1306 allocation failed"));
-    for (;;)
-      ;
-  }
-
-  Serial.print("Screen done");
-
-  // Initialize BMP280 sensor
-  if (!bmp.begin(0x76)) {  // Try 0x77 if 0x76 doesn't work
-    Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
-    while (1)
-      ;
-  }
-  
-  Serial.print("BMP done");
-
-  if (!mpu.begin()) { // Try 0x68 if 0x69 doesn't work
-    Serial.println("Failed to find MPU6050 chip");
-    while (1) {
-      delay(10);
+  // I2C Scanner - antes de inicializar cualquier sensor
+  Serial.println("Escaneando bus I2C...");
+  for (byte addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      Serial.print("  I2C encontrado en 0x");
+      Serial.println(addr, HEX);
     }
   }
+  Serial.println("Escaneo I2C completo.");
 
-  Serial.print("MPU done");
+  // Initialize OLED display
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("ERROR: SSD1306 no encontrado en 0x3C");
+  } else {
+    Serial.println("OK: SSD1306 encontrado");
+  }
+
+  // Initialize BMP280 sensor
+  if (!bmp.begin(0x76)) {
+    Serial.println("ERROR: BMP280 no encontrado en 0x76, probando 0x77...");
+    if (!bmp.begin(0x77)) {
+      Serial.println("ERROR: BMP280 tampoco en 0x77");
+    } else {
+      Serial.println("OK: BMP280 encontrado en 0x77");
+    }
+  } else {
+    Serial.println("OK: BMP280 encontrado en 0x76");
+  }
+
+  // Initialize MPU6050 sensor - probar ambas direcciones
+  if (!mpu.begin()) {
+    Serial.println("MPU6050 no encontrado en 0x68, probando 0x69...");
+    if (!mpu.begin(0x69)) {
+      Serial.println("ERROR: MPU6050 no encontrado en 0x68 ni 0x69");
+      Serial.println("REVISA: AD0 a GND = 0x68, AD0 a 3.3V = 0x69");
+      Serial.println("REVISA: pull-ups 4.7k en SDA/SCL");
+      Serial.println("REVISA: alimentacion 3.3V y conexiones");
+      while (1) {
+        Serial.println("no MPU");
+        delay(3000);
+      }
+    } else {
+      Serial.println("OK: MPU6050 encontrado en 0x69");
+    }
+  } else {
+    Serial.println("OK: MPU6050 encontrado en 0x68");
+  }
+
+  Serial.println("=== Todos los sensores OK ===");
 
   setupSensors();
 
-  // Clear display buffer
   display.clearDisplay();
   display.display();
 }
@@ -67,11 +93,11 @@ void setupSensors() {
                   Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
                   Adafruit_BMP280::FILTER_X16,      /* Filtering. */
                   Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
-  
+
   //setup MPU6050 sensor
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);  
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 }
 
 void loop() {
@@ -82,7 +108,7 @@ void loop() {
   display.clearDisplay();
 
   printScreen();
-  
+
   delay(500);
 }
 
@@ -95,7 +121,7 @@ void readBMPData() {
 void readMPUData() {
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
-  
+
   Serial.print("Accel X: ");
   Serial.print(a.acceleration.x);
   Serial.print(" m/s^2, Y: ");
@@ -108,7 +134,7 @@ void readMPUData() {
   Serial.print(g.gyro.y);
   Serial.print(" rad/s, Z: ");
   Serial.print(g.gyro.z);
-  Serial.println(" rad/s"); 
+  Serial.println(" rad/s");
 }
 
 void printScreen() {
@@ -119,20 +145,20 @@ void printScreen() {
   display.println("DATA");
 
   //Print temperature
-  display.setTextSize(1);    
-  display.setCursor(5, 20);  
+  display.setTextSize(1);
+  display.setCursor(5, 20);
   display.print("Temp: ");
   display.print(temp, 1);
   display.println(" *C");
 
   //Print preassure
-  display.setCursor(5, 30);  
+  display.setCursor(5, 30);
   display.print("Pressure: ");
   display.print(pressure, 1);
   display.println(" hPa");
 
   //Print altitude
-  display.setCursor(5, 40);  
+  display.setCursor(5, 40);
   display.print("Altitude: ");
   display.print(altitude, 1);
   display.println(" m");
@@ -140,4 +166,3 @@ void printScreen() {
   // Update the display with the buffer contents
   display.display();
 }
-
