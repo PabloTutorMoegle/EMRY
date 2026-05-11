@@ -3,7 +3,7 @@
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
-#include <Adafruit_MPU6050.h>
+
 
 // OLED display dimensions
 #define SCREEN_WIDTH 128
@@ -13,12 +13,18 @@
 // Initialize the display and sensors
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_BMP280 bmp;
-Adafruit_MPU6050 mpu;
+
 
 //BMP data variables
 float temp;
 float pressure;
 float altitude;
+
+// Ajusta este valor para calibrar la altitud:
+// - Sube el numero si la altitud lee muy baja (negativa)
+// - Baja el numero si la altitud lee muy alta
+// Referencia: cada +1 hPa ≈ -8.5m de cambio
+#define SEALEVEL_PRESSURE 1015.8  // hPa
 
 void setup() {
   Serial.begin(115200);
@@ -59,25 +65,6 @@ void setup() {
     Serial.println("OK: BMP280 encontrado en 0x76");
   }
 
-  // Initialize MPU6050 sensor - probar ambas direcciones
-  if (!mpu.begin()) {
-    Serial.println("MPU6050 no encontrado en 0x68, probando 0x69...");
-    if (!mpu.begin(0x69)) {
-      Serial.println("ERROR: MPU6050 no encontrado en 0x68 ni 0x69");
-      Serial.println("REVISA: AD0 a GND = 0x68, AD0 a 3.3V = 0x69");
-      Serial.println("REVISA: pull-ups 4.7k en SDA/SCL");
-      Serial.println("REVISA: alimentacion 3.3V y conexiones");
-      while (1) {
-        Serial.println("no MPU");
-        delay(3000);
-      }
-    } else {
-      Serial.println("OK: MPU6050 encontrado en 0x69");
-    }
-  } else {
-    Serial.println("OK: MPU6050 encontrado en 0x68");
-  }
-
   Serial.println("=== Todos los sensores OK ===");
 
   setupSensors();
@@ -87,24 +74,16 @@ void setup() {
 }
 
 void setupSensors() {
-  //setup BMP280 sensor
-  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
-                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
-                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
-                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
-                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
-
-  //setup MPU6050 sensor
-  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,
+                  Adafruit_BMP280::SAMPLING_X2,
+                  Adafruit_BMP280::SAMPLING_X16,
+                  Adafruit_BMP280::FILTER_X16,
+                  Adafruit_BMP280::STANDBY_MS_500);
 }
 
 void loop() {
   readBMPData();
-  readMPUData();
 
-  // Clear display buffer
   display.clearDisplay();
 
   printScreen();
@@ -115,34 +94,15 @@ void loop() {
 void readBMPData() {
   temp = bmp.readTemperature();
   pressure = bmp.readPressure() / 100;
-  altitude = bmp.readAltitude(1013.25); /* Adjusted to local forecast! */
-}
-
-void readMPUData() {
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-
-  Serial.print("Accel X: ");
-  Serial.print(a.acceleration.x);
-  Serial.print(" m/s^2, Y: ");
-  Serial.print(a.acceleration.y);
-  Serial.print(" m/s^2, Z: ");
-  Serial.print(a.acceleration.z);
-  Serial.print(" | Gyro X: ");
-  Serial.print(g.gyro.x);
-  Serial.print(" rad/s, Y: ");
-  Serial.print(g.gyro.y);
-  Serial.print(" rad/s, Z: ");
-  Serial.print(g.gyro.z);
-  Serial.println(" rad/s");
+  altitude = bmp.readAltitude(SEALEVEL_PRESSURE);
 }
 
 void printScreen() {
   //Print header
   display.setTextSize(2);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(20, 0);
-  display.println("DATA");
+  display.setCursor(10, 0);
+  display.println("EMRY DATA");
 
   //Print temperature
   display.setTextSize(1);
